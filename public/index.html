@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Sleeping Teaching Assistant — POSIX Concurrency Lab</title>
+  
+  <!-- Google Fonts: Fraunces (Headings), Plus Jakarta Sans (Body), IBM Plex Mono (Code/Telemetry) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    
+    <!-- Top Academic Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="header-badge">OS SYSTEMS LAB &bull; CS 301</div>
+        <h1 class="header-title">The Sleeping Teaching Assistant</h1>
+        <p class="header-subtitle">Real-time visualization of POSIX threads, semaphores, and mutex coordination in C</p>
+      </div>
+      <div class="header-right">
+        <div class="engine-indicator" id="engineIndicator">
+          <span class="indicator-dot" id="indicatorDot"></span>
+          <span class="indicator-label" id="indicatorLabel">Engine Idle</span>
+        </div>
+        <div class="ws-pill" id="wsPill" title="WebSocket status">
+          <span class="ws-dot"></span>
+          <span id="wsText">Connected</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Top Telemetry Cards -->
+    <section class="telemetry-grid">
+      <div class="metric-card">
+        <div class="metric-label">Students Served</div>
+        <div class="metric-value" id="valServed">0</div>
+        <div class="metric-subtext">Completed consultations</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Turned Away</div>
+        <div class="metric-value metric-accent-warn" id="valTurnedAway">0</div>
+        <div class="metric-subtext">Hallway chairs were full</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Avg Wait Time</div>
+        <div class="metric-value" id="valAvgWait">0<span class="metric-unit">ms</span></div>
+        <div class="metric-subtext">Queue to office consultation</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">TA Utilization</div>
+        <div class="metric-value" id="valTaBusy">0<span class="metric-unit">%</span></div>
+        <div class="metric-subtext">Time active helping students</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Hallway Queue</div>
+        <div class="metric-value" id="valQueueLen">0 / 3</div>
+        <div class="metric-subtext" id="valQueueSub">Chairs currently occupied</div>
+      </div>
+    </section>
+
+    <!-- Main Interactive Office Stage -->
+    <main class="stage-container">
+      <div class="stage-header">
+        <div class="stage-header-left">
+          <span class="stage-room-tag">ROOM 412 &bull; FACULTY OFFICE HOURS</span>
+          <span class="stage-legend">
+            <span class="legend-chip legend-sleeping"><span class="chip-color"></span> TA Sleeping</span>
+            <span class="legend-chip legend-awake"><span class="chip-color"></span> TA Awake</span>
+            <span class="legend-chip legend-helping"><span class="chip-color"></span> In Session</span>
+          </span>
+        </div>
+        <div class="stage-header-right">
+          <span class="sim-clock" id="simClock">T+ 0.00s</span>
+        </div>
+      </div>
+
+      <!-- Architectural Floor Plan Scene -->
+      <div class="floor-plan" id="floorPlan">
+        
+        <!-- Entrance / Hallway Door Area -->
+        <div class="zone-hallway" id="zoneHallway">
+          <div class="zone-watermark">HALLWAY CORRIDOR</div>
+          
+          <div class="entrance-portal" id="entrancePortal">
+            <div class="door-frame">
+              <div class="door-architrave"></div>
+              <div class="door-leaf">
+                <span class="door-knob"></span>
+              </div>
+            </div>
+            <div class="portal-label">BUILDING ENTRANCE</div>
+            
+            <!-- Dynamic Arrival / Turned-away staging -->
+            <div class="arrival-staging" id="arrivalStaging"></div>
+          </div>
+
+          <!-- Waiting Chairs Row -->
+          <div class="chairs-section">
+            <div class="chairs-title">WAITING CHAIRS (PROTECTED BY CHAIR_MUTEX)</div>
+            <div class="chairs-row" id="chairsRow">
+              <!-- Dynamically populated chairs -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Glass Wall / Threshold Divider -->
+        <div class="office-partition">
+          <div class="partition-glass">
+            <div class="frosted-line"></div>
+            <div class="office-plaque">TA OFFICE</div>
+            <div class="frosted-line"></div>
+          </div>
+        </div>
+
+        <!-- TA Office Chamber -->
+        <div class="zone-office" id="zoneOffice">
+          <div class="zone-watermark">CONSULTATION ROOM</div>
+          
+          <div class="office-workspace">
+            <!-- Student Visitor Desk Chair -->
+            <div class="consultation-spot" id="consultationSpot">
+              <div class="spot-label">VISITOR SEAT</div>
+              <div class="visitor-chair" id="visitorChair">
+                <!-- Seated student avatar inserted here during help -->
+                <div class="chair-silhouette"></div>
+              </div>
+            </div>
+
+            <!-- TA Desk with Computer and Lamp -->
+            <div class="desk-furniture">
+              <div class="desk-surface">
+                <div class="desk-accessory lamp"></div>
+                <div class="desk-accessory laptop">
+                  <div class="laptop-screen"></div>
+                </div>
+                <div class="desk-accessory papers"></div>
+                <div class="desk-nameplate">TEACHING ASSISTANT</div>
+              </div>
+            </div>
+
+            <!-- TA Avatar & Chair -->
+            <div class="ta-station" id="taStation">
+              <div class="ta-speech-bubble" id="taSpeech">Sleeping... zZz</div>
+              <div class="ta-avatar-wrapper state-sleeping" id="taAvatarWrapper">
+                <!-- Floating Zzz animation -->
+                <div class="zzz-container" id="zzzContainer">
+                  <span class="zzz z1">z</span>
+                  <span class="zzz z2">Z</span>
+                  <span class="zzz z3">Z</span>
+                </div>
+                
+                <!-- SVG Vector TA Character -->
+                <div class="character-svg-wrapper">
+                  <svg class="ta-svg" viewBox="0 0 100 120" width="80" height="96">
+                    <!-- Head & Hair -->
+                    <circle cx="50" cy="40" r="26" class="char-skin" fill="#f2c8a2" />
+                    <path d="M24,40 C24,20 35,14 50,14 C65,14 76,20 76,40 C76,28 66,22 50,22 C34,22 24,28 24,40 Z" fill="#2c3e50" />
+                    <!-- Eyes & Glasses -->
+                    <circle cx="41" cy="40" r="6" fill="none" stroke="#222" stroke-width="2.5" />
+                    <circle cx="59" cy="40" r="6" fill="none" stroke="#222" stroke-width="2.5" />
+                    <line x1="47" y1="40" x2="53" y2="40" stroke="#222" stroke-width="2.5" />
+                    <circle cx="41" cy="40" r="2.5" class="eye-pupil eye-left" fill="#222" />
+                    <circle cx="59" cy="40" r="2.5" class="eye-pupil eye-right" fill="#222" />
+                    <!-- Mouth -->
+                    <path class="char-mouth" d="M44,52 Q50,56 56,52" fill="none" stroke="#7a3e2e" stroke-width="2" stroke-linecap="round" />
+                    <!-- Torso / Professor Blazer -->
+                    <path d="M26,80 C26,66 36,64 50,64 C64,64 74,66 74,80 L78,118 L22,118 Z" class="char-coat" fill="#274c35" />
+                    <polygon points="50,64 42,88 58,88" fill="#f8fafc" />
+                    <polygon points="50,72 46,96 54,96" fill="#b94a28" />
+                  </svg>
+                </div>
+              </div>
+              <div class="ta-name-tag" id="taStateTag">STATUS: SLEEPING</div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- Simulation Controls Strip -->
+    <section class="controls-card">
+      <div class="controls-row-top">
+        <div class="control-group">
+          <label for="inputStudents">Students (N)</label>
+          <input type="number" id="inputStudents" min="1" max="24" value="5">
+        </div>
+        <div class="control-group">
+          <label for="inputChairs">Waiting Chairs</label>
+          <input type="number" id="inputChairs" min="0" max="8" value="3">
+        </div>
+        <div class="control-group">
+          <label for="inputMinHelp">Min Help (ms)</label>
+          <input type="number" id="inputMinHelp" min="200" max="10000" step="100" value="1200">
+        </div>
+        <div class="control-group">
+          <label for="inputMaxHelp">Max Help (ms)</label>
+          <input type="number" id="inputMaxHelp" min="200" max="15000" step="100" value="2600">
+        </div>
+        <div class="control-group">
+          <label for="inputMinArr">Min Arrival (ms)</label>
+          <input type="number" id="inputMinArr" min="200" max="10000" step="100" value="1800">
+        </div>
+        <div class="control-group">
+          <label for="inputMaxArr">Max Arrival (ms)</label>
+          <input type="number" id="inputMaxArr" min="200" max="15000" step="100" value="4500">
+        </div>
+      </div>
+
+      <div class="controls-row-bottom">
+        <div class="speed-slider-group">
+          <label for="speedSlider">Simulation Speed: <span class="speed-display" id="speedDisplay">1.0x</span></label>
+          <input type="range" id="speedSlider" min="0.25" max="4.0" step="0.25" value="1.0">
+        </div>
+
+        <div class="action-buttons-group">
+          <button class="btn btn-primary" id="btnStart" title="Compile & launch C engine">
+            <span class="btn-icon">&#9658;</span> Start Simulation
+          </button>
+          <button class="btn btn-secondary" id="btnPause" disabled title="Pause or resume simulation execution">
+            <span class="btn-icon">&#10074;&#10074;</span> Pause
+          </button>
+          <button class="btn btn-secondary" id="btnSpawn" disabled title="Dynamically inject an extra student thread">
+            <span class="btn-icon">+</span> Add Student
+          </button>
+          <button class="btn btn-outline" id="btnReset" title="Gracefully terminate C threads and reset state">
+            <span class="btn-icon">&#8635;</span> Reset
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Lower Split: Timeline & OS Architecture vs. Live POSIX Event Log -->
+    <div class="lower-layout">
+      
+      <!-- Left Column: Timeline & OS Concepts -->
+      <div class="lower-left">
+        
+        <!-- Live Strip Chart of TA Activity -->
+        <div class="panel-card timeline-panel">
+          <div class="panel-header">
+            <div class="panel-title">TA State Activity Timeline</div>
+            <div class="timeline-legend">
+              <span class="legend-mark mark-sleep"></span> Sleeping
+              <span class="legend-mark mark-wake"></span> Awake
+              <span class="legend-mark mark-help"></span> In Consultation
+            </div>
+          </div>
+          <div class="canvas-wrapper">
+            <canvas id="taTimelineCanvas" width="700" height="90"></canvas>
+          </div>
+        </div>
+
+        <!-- Academic "How It Works" Section for Viva / Evaluation -->
+        <div class="panel-card sync-docs-card">
+          <div class="panel-header">
+            <div class="panel-title">Concurrency &amp; Synchronization Architecture</div>
+            <span class="doc-badge">POSIX Pthreads</span>
+          </div>
+          <div class="sync-grid">
+            <div class="sync-item">
+              <div class="sync-name"><code>students_sem</code> &bull; Counting Semaphore</div>
+              <p>Initialized to <code>0</code>. Represents the number of students currently waiting in chairs. Arriving students who secure a chair execute <code>sem_post(&amp;students_sem)</code>. The TA thread waits in <code>sem_wait(&amp;students_sem)</code>; if 0, the TA sleeps until signaled.</p>
+            </div>
+            <div class="sync-item">
+              <div class="sync-name"><code>ta_sem</code> &bull; Rendezvous Semaphore</div>
+              <p>Initialized to <code>0</code>. Synchronizes the TA's invitation with the front-of-line student. When the TA is ready to begin a consultation, the TA invokes <code>sem_post(&amp;ta_sem)</code>, unblocking the designated student to leave the hallway chair and enter the office.</p>
+            </div>
+            <div class="sync-item">
+              <div class="sync-name"><code>chair_mutex</code> &bull; Mutual Exclusion</div>
+              <p>Protects shared simulation state: the occupied chairs array, the circular FIFO queue, arrival timestamps, and telemetry. Ensures that chair allocation and queue modifications are atomic, eliminating race conditions.</p>
+            </div>
+            <div class="sync-item">
+              <div class="sync-name">Strict FIFO Order &amp; Deadlock Prevention</div>
+              <p>POSIX semaphores alone do not guarantee arrival-order dispatching. We use a circular queue paired with a condition variable <code>student_called_cv</code> so students are served in exact arrival order. Deadlock is prevented by acquiring <code>chair_mutex</code> only for O(1) state transitions and never holding locks while blocking on semaphores.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Live Event Stream -->
+      <div class="lower-right">
+        <div class="panel-card log-panel">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <div class="panel-title">Live C Simulation Event Stream</div>
+              <span class="log-counter" id="logCounter">0 events</span>
+            </div>
+            <div class="log-actions">
+              <label class="autoscroll-label">
+                <input type="checkbox" id="chkAutoScroll" checked> Auto-scroll
+              </label>
+              <button class="btn-tiny" id="btnClearLog">Clear</button>
+            </div>
+          </div>
+          
+          <div class="event-feed" id="eventFeed" role="log" aria-live="polite">
+            <div class="log-empty-state" id="logEmptyState">Simulation not yet started. Click "Start Simulation" above to compile and run the POSIX C engine.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Editorial Footer -->
+    <footer class="app-footer">
+      <div class="footer-left">
+        <span>Operating Systems Project &bull; Sleeping Teaching Assistant</span>
+        <span class="footer-sep">&bull;</span>
+        <span>POSIX Threads (<code>pthread</code>), Semaphores (<code>sem_t</code>), &amp; Mutex Locks</span>
+      </div>
+      <div class="footer-right">
+        <span>Tested on macOS Darwin &amp; Linux / WSL</span>
+      </div>
+    </footer>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+

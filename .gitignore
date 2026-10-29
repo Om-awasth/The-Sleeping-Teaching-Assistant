@@ -1,0 +1,5 @@
+node_modules/
+sta
+sta.exe
+*.o
+.DS_Store

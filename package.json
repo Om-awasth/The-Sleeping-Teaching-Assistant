@@ -1,0 +1,25 @@
+{
+  "name": "sleeping-ta-simulation",
+  "version": "1.0.0",
+  "description": "Sleeping Teaching Assistant Problem using POSIX Threads, Semaphores, and WebSocket Visualizer",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "make"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  },
+  "keywords": [
+    "posix",
+    "threads",
+    "semaphores",
+    "operating-systems",
+    "concurrency",
+    "simulation"
+  ],
+  "author": "Antigravity Engineering",
+  "license": "MIT"
+}
+
